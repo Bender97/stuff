@@ -103,7 +103,7 @@ predicter:
   #  lidarFrame: "front_lidar"
     baselinkFrame: "base_link"
     odometryFrame: "base_link"
-    mapFrame: "base_footprint"
+    mapFrame: "map"
 
   #  vehicleXMin: -1.8
   #  vehicleXMax:  1.0

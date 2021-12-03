@@ -163,8 +163,6 @@ private:
 
         // transform lidar cloud to mapFrame ( to integrate it with the previous clouds )
         _lidar_cloud_in->header.frame_id = lidarFrame;
-
-
         pcl_ros::transformPointCloud(mapFrame,                  // target frame
                                      lidar_cloud_in_msg,          // cloud in
                                      lidar_cloud_in_map_msg,         // cloud out

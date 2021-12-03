@@ -1,4 +1,5 @@
 
+#include <utility.h>
 #include "IOUtils.h"
 
 
@@ -11,14 +12,14 @@ bool IOUtils::dirExists(std::string &path) {
     return boost::filesystem::exists(path);
 }
 
-void IOUtils::checkPaths(std::string base_dir_path) {
+void IOUtils::checkPaths(std::string base_dir_path, rclcpp::Logger &logger) {
     assert(base_dir_path.length()>0);
     if (base_dir_path[0]!='/') {        //no absolute value
         checkAndCreateDir(base_dir_path);
     }
     else {
         if (!dirExists(base_dir_path)) {
-            ROS_ERROR_STREAM("The base directory indicated with the absolute path:\n" + base_dir_path + "\n does not exist! Adjust config/params.yaml file!");
+            RCLCPP_ERROR_STREAM(logger, "The base directory indicated with the absolute path:\n" + base_dir_path + "\n does not exist! Adjust config/params.yaml file!");
             assert(false);
         }
     }
@@ -49,7 +50,8 @@ void IOUtils::loadNormalizationConfig(std::string &normalization_config_path,
     std::ifstream input_normalization_config_file;
     input_normalization_config_file = std::ifstream(normalization_config_path);
     std::string line;
-    int start, end, col_cont;
+    size_t start, end;
+    int col_cont;
 
     min.resize(features_num);
     p2p.resize(features_num);
@@ -59,7 +61,7 @@ void IOUtils::loadNormalizationConfig(std::string &normalization_config_path,
     start = 0, col_cont = 0;
     getline (input_normalization_config_file, line);
     assert(line.length()>0);
-    for (int i=0; i<line.length(); i++) {
+    for (size_t i=0; i<line.length(); i++) {
         assert(col_cont<features_num);
         if (line.at(i) == ' ' || line.at(i) == '\n' || i==line.length()-1) {
             end = i;
@@ -73,7 +75,7 @@ void IOUtils::loadNormalizationConfig(std::string &normalization_config_path,
     start = 0, col_cont = 0;
     getline (input_normalization_config_file, line);
     assert(line.length()>0);
-    for (int i=0; i<line.length(); i++) {
+    for (size_t i=0; i<line.length(); i++) {
         assert(col_cont<features_num);
         if (line.at(i) == ' ' || line.at(i) == '\n' || i==line.length()-1) {
             end = i;

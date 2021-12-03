@@ -82,7 +82,7 @@ void Stats::computeStats() {
     UNKR = RATE(UNK, (tot_predictions));
 }
 
-void Stats::printStats() {
+void Stats::printStats(rclcpp::Logger &logger) {
     computeStats();
 
     int unique_setw = (int) (std::to_string(tot_predictions).length());
@@ -90,21 +90,21 @@ void Stats::printStats() {
     float perc[] = {non_trav_percentage, trav_percentage, accuracy, FPR, TPR, FNR, TNR, fake_accuracy, miou, f1score};
     for (int i=0; i<7; i++) if ((temp_setw = (int) (std::to_string(perc[i]).length())) > perc_setw) perc_setw = temp_setw;
 
-    ROS_INFO_STREAM("   -- unique non_trav: "                                       << std::setw(perc_setw) << TO_PERC(non_trav_percentage) << " % [" << std::setw(unique_setw) <<  non_trav_num << " cells]");
-    ROS_INFO_STREAM(std::setprecision(3) << "   -- unique trav    : "           << std::setw(perc_setw) << TO_PERC(trav_percentage)     << " % [" << std::setw(unique_setw) <<  trav_num << " cells]");
-    ROS_INFO_STREAM(std::setprecision(3) << "   -- accuracy       : \033[1;32m" << std::setw(perc_setw) << TO_PERC(accuracy)            << "\033[0m %");
-    ROS_INFO_STREAM(std::setprecision(3) << "   -- local accuracy : \033[1;32m" << std::setw(perc_setw) << TO_PERC(fake_accuracy)            << "\033[0m %");
-    ROS_INFO_STREAM(std::setprecision(3) << "   -- miou           : \033[1;32m" << std::setw(perc_setw) << TO_PERC(miou)            << "\033[0m %");
-    ROS_INFO_STREAM(std::setprecision(3) << "   -- f1score        : \033[1;32m" << std::setw(perc_setw) << TO_PERC(f1score)            << "\033[0m %");
-    ROS_INFO_STREAM(std::setprecision(3) << "   -- FP rate        : "           << std::setw(perc_setw) << TO_PERC(FPR)                 << " % [" << std::setw(unique_setw) << FP << " / " << non_trav_num << " cells ]");
-    ROS_INFO_STREAM(std::setprecision(3) << "   -- TP rate        : "           << std::setw(perc_setw) << TO_PERC(TPR)                 << " % [" << std::setw(unique_setw) << TP << " / " << trav_num << " cells ]");
-    ROS_INFO_STREAM(std::setprecision(3) << "   -- FN rate        : "               << std::setw(perc_setw) << TO_PERC(FNR)                 << " % [" << std::setw(unique_setw) << FN << " / " << trav_num << " cells ]");
-    ROS_INFO_STREAM(std::setprecision(3) << "   -- TN rate        : "           << std::setw(perc_setw) << TO_PERC(TNR)                 << " % [" << std::setw(unique_setw) << TN << " / " << non_trav_num << " cells ]");
-    ROS_INFO_STREAM(std::setprecision(3) << "   -- UNK rate       : "           << std::setw(perc_setw) << TO_PERC(UNKR)                << " % [" << std::setw(unique_setw) << UNK<< " / " << tot_predictions << " cells ]");
+    RCLCPP_INFO_STREAM(logger, "   -- unique non_trav: "                                       << std::setw(perc_setw) << TO_PERC(non_trav_percentage) << " % [" << std::setw(unique_setw) <<  non_trav_num << " cells]");
+    RCLCPP_INFO_STREAM(logger, std::setprecision(3) << "   -- unique trav    : "           << std::setw(perc_setw) << TO_PERC(trav_percentage)     << " % [" << std::setw(unique_setw) <<  trav_num << " cells]");
+    RCLCPP_INFO_STREAM(logger, std::setprecision(3) << "   -- accuracy       : \033[1;32m" << std::setw(perc_setw) << TO_PERC(accuracy)            << "\033[0m %");
+    RCLCPP_INFO_STREAM(logger, std::setprecision(3) << "   -- local accuracy : \033[1;32m" << std::setw(perc_setw) << TO_PERC(fake_accuracy)            << "\033[0m %");
+    RCLCPP_INFO_STREAM(logger, std::setprecision(3) << "   -- miou           : \033[1;32m" << std::setw(perc_setw) << TO_PERC(miou)            << "\033[0m %");
+    RCLCPP_INFO_STREAM(logger, std::setprecision(3) << "   -- f1score        : \033[1;32m" << std::setw(perc_setw) << TO_PERC(f1score)            << "\033[0m %");
+    RCLCPP_INFO_STREAM(logger, std::setprecision(3) << "   -- FP rate        : "           << std::setw(perc_setw) << TO_PERC(FPR)                 << " % [" << std::setw(unique_setw) << FP << " / " << non_trav_num << " cells ]");
+    RCLCPP_INFO_STREAM(logger, std::setprecision(3) << "   -- TP rate        : "           << std::setw(perc_setw) << TO_PERC(TPR)                 << " % [" << std::setw(unique_setw) << TP << " / " << trav_num << " cells ]");
+    RCLCPP_INFO_STREAM(logger, std::setprecision(3) << "   -- FN rate        : "               << std::setw(perc_setw) << TO_PERC(FNR)                 << " % [" << std::setw(unique_setw) << FN << " / " << trav_num << " cells ]");
+    RCLCPP_INFO_STREAM(logger, std::setprecision(3) << "   -- TN rate        : "           << std::setw(perc_setw) << TO_PERC(TNR)                 << " % [" << std::setw(unique_setw) << TN << " / " << non_trav_num << " cells ]");
+    RCLCPP_INFO_STREAM(logger, std::setprecision(3) << "   -- UNK rate       : "           << std::setw(perc_setw) << TO_PERC(UNKR)                << " % [" << std::setw(unique_setw) << UNK<< " / " << tot_predictions << " cells ]");
 }
 
-void Stats::printStats(std::string title) {
-    ROS_INFO_STREAM("");
-    ROS_WARN_STREAM(title);
-    printStats();
+void Stats::printStats(std::string title, rclcpp::Logger &logger) {
+    RCLCPP_INFO(logger, "");
+    RCLCPP_WARN(logger, title);
+    printStats(logger);
 }

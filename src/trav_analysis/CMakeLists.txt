@@ -49,18 +49,26 @@ include_directories( include
         ${OpenCV_INCLUDE_DIRS}
         )
 
-
-add_library(CellManagement src/utils/CellManagement.cpp )
-add_library(GridManagement src/utils/GridManagement.cpp )
+# ADD LIBRARY WITHOUT THE HEADER FILE!
+add_library(Stats           src/utils/Stats.cpp           )
+add_library(IOUtils         src/utils/IOUtils.cpp         )
+add_library(CellManagement  src/utils/CellManagement.cpp  )
+add_library(GridManagement  src/utils/GridManagement.cpp  )
 
 #set ( CUSTOM_LIBRARIES  Stats  DatasetStats  IOUtils  CellManagement GridManagement Features  Camera )
-set ( CUSTOM_LIBRARIES  CellManagement  GridManagement)
-
-target_link_libraries(GridManagement ${PCL_LIBRARIES}  CellManagement )
+set ( CUSTOM_LIBRARIES  Stats IOUtils CellManagement  GridManagement)
 
 
+
+ament_target_dependencies(Stats           ${dependencies})
+ament_target_dependencies(IOUtils         ${dependencies})
 ament_target_dependencies(CellManagement  ${dependencies})
 ament_target_dependencies(GridManagement  ${dependencies})
+
+
+
+target_link_libraries(IOUtils Stats )
+target_link_libraries(GridManagement ${PCL_LIBRARIES}  CellManagement )
 
 add_executable(${PROJECT_NAME}_predicter src/predicter.cpp)
 target_link_libraries(${PROJECT_NAME}_predicter ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${CUSTOM_LIBRARIES} )
