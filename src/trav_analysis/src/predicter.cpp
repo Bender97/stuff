@@ -3,6 +3,11 @@
 #include "utility.h"
 
 #include "pcl_ros/transforms.hpp"
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/create_timer_ros.h>
+#include <tf2_ros/message_filter.h>
+#include <tf2_ros/transform_listener.h>
+
 
 class Predicter : public ParamServer {
 
@@ -22,37 +27,49 @@ public:
                 predictedTraversabilityTopic, 1
         );
 
-        // initialization of tf2 listener (from transformations btw frames)
-        tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
-        transform_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+        // initialization of tf2 listener (from transforms btw frames)
+        tf_buffer_.reset(new tf2_ros::Buffer(this->get_clock()));
+        transform_listener_.reset(new tf2_ros::TransformListener(*tf_buffer_));
 
-        initPCs();
+        resetANDresizePointClouds();
 
         cellPointsBuckets.resize(grid.num_cells_per_side_squared);
         currveloBuckets.resize(grid.num_cells_per_side_squared);
+        
         cellIsPredictable.resize(grid.num_cells_per_side_squared);
+
+        enqueuedCloudsSizes.resize(cloudsQueue_fixed_size, 0);
     }
 
 private:
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subLidarCloud;
+
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubIntegratedCloud;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubPredTravGrid;
 
     sensor_msgs::msg::PointCloud2 lidar_cloud_in_msg;
     sensor_msgs::msg::PointCloud2 lidar_cloud_in_map_msg;
+    sensor_msgs::msg::PointCloud2 integrated_clouds_map_msg;
+    sensor_msgs::msg::PointCloud2 integrated_clouds_lidar_msg;
 
 
 
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr _lidar_cloud_in;
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr _lidar_cloud_map;
-    pcl::PointCloud<pcl::PointXYZI>::Ptr _pred_trav_grid_lidar;
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr _integrated_clouds_map;
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr _integrated_clouds_lidar;
-
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr  _lidar_cloud_in;
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr  _lidar_cloud_map;
+    pcl::PointCloud<pcl::PointXYZI>::Ptr    _pred_trav_grid_map;
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr  _integrated_clouds_map;
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr  _integrated_clouds_lidar;
+    pcl::PointCloud<PointType>::Ptr         _curr_trav_grid_map;
+    pcl::PointCloud<PointType>::Ptr         _curr_trav_grid_lidar;
+    
+    // buckets use to sort points into cells of the grid based on their 3D coordinates
     std::vector<std::vector<pcl::PointXYZRGB *>> cellPointsBuckets;
     std::vector<std::vector<pcl::PointXYZRGB *>> currveloBuckets;
+    
+    // vector used to store the size of each cloud ( used in integration of subsequent clouds )
     std::vector<int> enqueuedCloudsSizes;
 
+    // used to regulate the timestamp on each header packet published in this node
     std_msgs::msg::Header lidar_msg_header;
 
     // Transform Listener
@@ -60,24 +77,28 @@ private:
     std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
     geometry_msgs::msg::TransformStamped transformStamped;
 
+    int frame_cont = 0;
+
     cv::Ptr<cv::ml::SVM> svm;
     int features_num;
-
-    tf2::Transform prova;
-
+    
     std::vector<float> min, p2p;         // needed to normalize new data
 
-    void initPCs() {
+    void resetANDresizePointClouds() {
         // RESET
         _lidar_cloud_in         .reset(new pcl::PointCloud<pcl::PointXYZRGB>());
         _lidar_cloud_map        .reset(new pcl::PointCloud<pcl::PointXYZRGB>());
-        _pred_trav_grid_lidar   .reset(new pcl::PointCloud<pcl::PointXYZI>());
         _integrated_clouds_map  .reset(new pcl::PointCloud<pcl::PointXYZRGB>());
         _integrated_clouds_lidar.reset(new pcl::PointCloud<pcl::PointXYZRGB>());
+        _pred_trav_grid_map   .reset(new pcl::PointCloud<PointType>());
+        _curr_trav_grid_map         .reset(new pcl::PointCloud<PointType>());
+        _curr_trav_grid_lidar   .reset(new pcl::PointCloud<PointType>());
 
         // RESIZE
         //_lidar_cloud_in->clear();
-        _pred_trav_grid_lidar->points.resize(grid.num_cells_per_side_squared);
+        _pred_trav_grid_map->points.resize(grid.num_cells_per_side_squared);
+        _curr_trav_grid_map      ->points.resize(grid.num_cells_per_side_squared);
+        _curr_trav_grid_lidar->points.resize(grid.num_cells_per_side_squared);
     }
 
     void lidarCloudHandler(const sensor_msgs::msg::PointCloud2::SharedPtr laserCloudMsg) {
@@ -92,12 +113,12 @@ private:
 
     void resetData() {
         for (int idx=0; idx<grid.num_cells_per_side_squared; ++idx) {
-            _pred_trav_grid_lidar->points[idx].z       = LOWEST_Z_VALUE;
-//            currTravGrid->points[idx].z       = LOWEST_Z_VALUE;
-//            currTravGrid_lidar->points[idx].z = LOWEST_Z_VALUE;
-            _pred_trav_grid_lidar->points[idx].intensity       = UNKNOWN_CELL_LABEL;
-//            currTravGrid->points[idx].intensity       = UNKNOWN_CELL_LABEL;
-//            currTravGrid_lidar->points[idx].intensity = UNKNOWN_CELL_LABEL;
+            _pred_trav_grid_map->points[idx].z = LOWEST_Z_VALUE;
+            _curr_trav_grid_map->points[idx].z       = LOWEST_Z_VALUE;
+            _curr_trav_grid_lidar->points[idx].z = LOWEST_Z_VALUE;
+            _pred_trav_grid_map->points[idx].intensity = UNKNOWN_CELL_LABEL;
+            _curr_trav_grid_map->points[idx].intensity       = UNKNOWN_CELL_LABEL;
+            _curr_trav_grid_lidar->points[idx].intensity = UNKNOWN_CELL_LABEL;
 
             cellIsPredictable[idx] = 0;
 
@@ -112,20 +133,6 @@ private:
     }
 
     bool updateLidarToMapTransform() {
-        try {
-            transformStamped = tf_buffer_->lookupTransform(
-                    lidarFrame, mapFrame,
-                    tf2::TimePointZero );
-        } catch (tf2::TransformException & ex) {
-            RCLCPP_INFO(
-                    this->get_logger(), "Could not transform %s to %s: %s",
-                    lidarFrame.c_str(), mapFrame.c_str(), ex.what());
-            return false;
-        }
-        return true;
-    }
-
-    bool updateMapToLidarTransform() {
         try {
             transformStamped = tf_buffer_->lookupTransform(
                     mapFrame, lidarFrame,
@@ -151,45 +158,73 @@ private:
                 int idx = row + col* grid.num_cells_per_side;
                 x = (float) col * grid.resolution + gridBottomRight.x;
                 y = (float) row * grid.resolution + gridBottomRight.y;
-                _pred_trav_grid_lidar->points[idx].x = x;
-                _pred_trav_grid_lidar->points[idx].y = y;
-                _pred_trav_grid_lidar->points[idx].z = 0;
-                _pred_trav_grid_lidar->points[idx].intensity = 100;
+                _pred_trav_grid_map->points[idx].x = x;
+                _pred_trav_grid_map->points[idx].y = y;
+                _curr_trav_grid_map->points[idx].x = x;
+                _curr_trav_grid_map->points[idx].y = y;
             }
         }
     }
 
-    void script() {
-
-        // transform lidar cloud to mapFrame ( to integrate it with the previous clouds )
+    void transformLidarCloudToMapFrame() {
         _lidar_cloud_in->header.frame_id = lidarFrame;
         pcl_ros::transformPointCloud(mapFrame,                  // target frame
-                                     lidar_cloud_in_msg,          // cloud in
-                                     lidar_cloud_in_map_msg,         // cloud out
+                                     rclcpp::Time(0),
+                                     *_lidar_cloud_in,          // cloud in
+                                     lidarFrame,
+                                     *_lidar_cloud_map,         // cloud out
+                                     *tf_buffer_
+        );
+        RCLCPP_INFO(this->get_logger(), "transformed lidar_cloud_in to map frame");
+    }
+
+    void transformIntegratedCloudsToLidarFrame() {
+        _integrated_clouds_map->header.frame_id = mapFrame;
+        pcl_ros::transformPointCloud(lidarFrame,                  // target frame
+                                     rclcpp::Time(0),
+                                     *_integrated_clouds_map,          // cloud in
+                                     mapFrame,
+                                     *_integrated_clouds_lidar,         // cloud out
+                                     *tf_buffer_
+        );
+        RCLCPP_INFO(this->get_logger(), "transformed integrated_clouds_map to lidar frame");
+    }
+
+    float getAvgElevationOfPointsInCell(std::vector<pcl::PointXYZRGB *> cell) {
+        float z_sum = .0f;
+        for (auto &point: cell) z_sum += point->z;
+        return ( z_sum / ( (float) cell.size() ) );
+    }
+
+    void updateGridCellsElevation() {
+        for (int cell_idx=0; cell_idx<grid.num_cells_per_side_squared; ++cell_idx) {
+            /// if the cell has a suff num of points, set the avg elev to the pred cell
+            if (cellPointsBuckets[cell_idx].size() >= (size_t) min_points_in_bucket)
+                _pred_trav_grid_map->points[cell_idx].z = getAvgElevationOfPointsInCell(cellPointsBuckets[cell_idx]);
+                /// else remove points which are unknown (only for visualization)
+            else {
+                _pred_trav_grid_map->points[cell_idx].intensity = UNKNOWN_CELL_LABEL;
+                _pred_trav_grid_map->points[cell_idx].z         = HIGHEST_Z_VALUE;
+            }
+        }
+    }
+
+    void getGridInLidarFrame() {
+        _curr_trav_grid_map->header.frame_id = mapFrame;
+        pcl_ros::transformPointCloud(lidarFrame,
+                                     rclcpp::Time(0),
+                                     *_curr_trav_grid_map,
+                                     mapFrame,
+                                     *_curr_trav_grid_lidar,
                                      *tf_buffer_
                                      );
-        pcl::fromROSMsg(lidar_cloud_in_map_msg, *_lidar_cloud_map);
-        RCLCPP_INFO(this->get_logger(), "transformed lidar cloud in to map frame");
-
-
-        updateLidarToMapTransform();
-        updateGridBottomRight_map();
-        updateGridCellsCoordinates();
-
-        *_integrated_clouds_map = *_lidar_cloud_map;
-        *_integrated_clouds_lidar = *_lidar_cloud_map;
-
-//        GridManagement::sortPointsInGrid(_integrated_clouds_map, _integrated_clouds_lidar, cellPointsBuckets, gridBottomRight, grid);
-        GridManagement::sortPointsInGrid(_lidar_cloud_map, _integrated_clouds_lidar, cellPointsBuckets, gridBottomRight, grid);
-
-        publishClouds();
     }
 
     void publishClouds() {
         sensor_msgs::msg::PointCloud2 temp;
 
         if (pubPredTravGrid->get_subscription_count() != 0) {
-            pcl::toROSMsg(*_pred_trav_grid_lidar, temp);
+            pcl::toROSMsg(*_pred_trav_grid_map, temp);
             temp.header.stamp = lidar_msg_header.stamp;
             temp.header.frame_id = mapFrame;
             pubPredTravGrid->publish(temp);
@@ -201,6 +236,48 @@ private:
             temp.header.frame_id = mapFrame;
             pubIntegratedCloud->publish(temp);
         }
+    }
+
+    void script() {
+
+
+        // transform lidar cloud to mapFrame ( to integrate it with the previous clouds )
+        transformLidarCloudToMapFrame();
+
+        integrateClouds(_lidar_cloud_map, enqueuedCloudsSizes, _integrated_clouds_map);
+
+        if ( frame_cont < cloudsQueue_fixed_size )     {
+            RCLCPP_WARN_STREAM(this->get_logger(), "cannot predict yet or left image is empty -> Ignoring data (frame_cont: "
+                            + std::to_string(frame_cont) + " / " + std::to_string(cloudsQueue_fixed_size) + ")");
+            frame_cont++;
+            return;
+        }
+
+        // transform integrated cloud to lidarFrame ( to exclude those points close to vehicle -- noise -- )
+        transformIntegratedCloudsToLidarFrame();
+
+        resetData();
+
+        if (!updateLidarToMapTransform()) return;
+
+        updateGridBottomRight_map();
+        updateGridCellsCoordinates();
+
+        GridManagement::sortPointsInGrid(_integrated_clouds_map, _integrated_clouds_lidar, cellPointsBuckets, gridBottomRight, grid);
+        GridManagement::sortPointsInGrid(_lidar_cloud_map, _lidar_cloud_in, currveloBuckets, gridBottomRight, grid);
+
+        for (int i=0; i<grid.num_cells_per_side_squared; ++i) {
+            if (currveloBuckets[i].size()< (size_t) min_points_in_bucket_to_project_to_camera) {
+                _curr_trav_grid_map->points[i].intensity = UNKNOWN_CELL_LABEL;
+                _curr_trav_grid_map->points[i].z = HIGHEST_Z_VALUE;
+            }
+        }
+
+        updateGridCellsElevation();
+
+        getGridInLidarFrame();
+
+        publishClouds();
     }
 
     void loadSVM() {

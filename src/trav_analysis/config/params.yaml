@@ -30,7 +30,7 @@ predicter:
     minNeighborsToPropagateLabel: 1
     predictedLabelWeight: 3
 
-    cloudsQueueFixedSize: 2
+    cloudsQueueFixedSize: 5
 
     timingVerbosity: 1
 
@@ -100,7 +100,7 @@ predicter:
 
     # Frames
     lidarFrame: "velodyne"
-  #  lidarFrame: "front_lidar"
+#    lidarFrame: "base_footprint"
     baselinkFrame: "base_link"
     odometryFrame: "base_link"
     mapFrame: "map"

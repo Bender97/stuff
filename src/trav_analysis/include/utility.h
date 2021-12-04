@@ -37,7 +37,7 @@
 
 #include "macro_utility.h"
 #include "GridParams.h"
-//#include "Stats.h"
+#include "Stats.h"
 //#include "DatasetStats.h"
 //#include "IOUtils.h"
 #include "CellManagement.h"
@@ -79,6 +79,16 @@ const std::string PRED_LABEL_WEIGHT_GRID_PARAM = "predictedLabelWeight";
 const std::string RADIUS_GRID_PARAM = "radiusOfAttention";
 const std::string RESOLUTION_GRID_PARAM = "mapResolution";
 const std::string INTERNAL_RESOLUTION_GRID_PARAM = "internalCellResolution";
+
+// Vehicle
+const std::string VEHICLE_X_MIN = "vehicleXMin";
+const std::string VEHICLE_X_MAX = "vehicleXMax";
+const std::string VEHICLE_Y_MIN = "vehicleYMin";
+const std::string VEHICLE_Y_MAX = "vehicleYMax";
+
+// Other Params
+const std::string CLOUDSQUEUE_FIXED_SIZE = "cloudsQueueFixedSize";
+
 
 class ParamServer : public rclcpp::Node {
 protected:
@@ -171,6 +181,7 @@ public:
         this->declare_parameter(POL_SVM_PATH);
         this->declare_parameter(RBF_SVM_PATH);
 
+        // Grid
         this->declare_parameter(MIN_PTS_IN_BUCKET_GRID_PARAM);
         this->declare_parameter(MIN_PTS_IN_BUCKET_TO_PROJECT_GRID_PARAM);
         this->declare_parameter(MIN_NEIGHBORS_TO_PROP_LABEL_GRID_PARAM);
@@ -178,6 +189,15 @@ public:
         this->declare_parameter(RADIUS_GRID_PARAM);
         this->declare_parameter(RESOLUTION_GRID_PARAM);
         this->declare_parameter(INTERNAL_RESOLUTION_GRID_PARAM);
+
+        // Vehicle
+        this->declare_parameter(VEHICLE_X_MIN);
+        this->declare_parameter(VEHICLE_X_MAX);
+        this->declare_parameter(VEHICLE_Y_MIN);
+        this->declare_parameter(VEHICLE_Y_MAX);
+
+        // Other parameters
+        this->declare_parameter(CLOUDSQUEUE_FIXED_SIZE);
 
         // Read parameters
 
@@ -271,13 +291,75 @@ public:
         gridBottomRight.y = gridBottomRight.x;
 
         // Vehicle
+        if (!this->get_parameter(VEHICLE_X_MIN, grid.vehicle_x_min)) {
+            RCLCPP_WARN(this->get_logger(), "Parameter %s not found", VEHICLE_X_MIN.c_str());
+        }
+        if (!this->get_parameter(VEHICLE_X_MAX, grid.vehicle_x_max)) {
+            RCLCPP_WARN(this->get_logger(), "Parameter %s not found", VEHICLE_X_MAX.c_str());
+        }
+        if (!this->get_parameter(VEHICLE_Y_MIN, grid.vehicle_y_min)) {
+            RCLCPP_WARN(this->get_logger(), "Parameter %s not found", VEHICLE_Y_MIN.c_str());
+        }
+        if (!this->get_parameter(VEHICLE_Y_MAX, grid.vehicle_y_max)) {
+            RCLCPP_WARN(this->get_logger(), "Parameter %s not found", VEHICLE_Y_MAX.c_str());
+        }
 
         // Features
 
         // Training Parameters
 
         // Other Parameters
+
+        if (!this->get_parameter(CLOUDSQUEUE_FIXED_SIZE, cloudsQueue_fixed_size)) {
+            RCLCPP_WARN(this->get_logger(), "Parameter %s not found", CLOUDSQUEUE_FIXED_SIZE.c_str());
+        }
     }
+
+
+
+
+
+    void integrateClouds(pcl::PointCloud<pcl::PointXYZRGB>::Ptr& _lidar_cloud_map,
+                         std::vector<int> &enqueuedCloudsSizes,
+
+                         pcl::PointCloud<pcl::PointXYZRGB>::Ptr& _integrated_clouds_map) {
+
+
+        size_t i;
+        size_t final_size, old_data_size,  offset;
+
+        /// compute final size of the integrated cloud
+        final_size = (int) _lidar_cloud_map->points.size();
+        for (i = 0; i < (size_t) cloudsQueue_fixed_size; ++i) final_size += enqueuedCloudsSizes[i];
+
+        std::cout << "CLOUD QUEUE FIXED SIZE: " << cloudsQueue_fixed_size << std::endl;
+        std::cout << "FINAL SIZE: " << final_size << std::endl;
+
+        /// init temp data (cannot modify _integrated_clouds_map, we need that first part of the data!)
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr temp;
+        temp.reset(new pcl::PointCloud<pcl::PointXYZRGB>());
+        temp->points.resize(final_size);
+
+        /// copy new points up to velo size
+        for (i = 0; i < _lidar_cloud_map->points.size(); ++i) temp->points[i] = _lidar_cloud_map->points[i];
+
+        /// fill integrated cloud with the previous data
+        offset = (int) _lidar_cloud_map->points.size();
+        old_data_size = final_size - (int) _lidar_cloud_map->points.size();
+        for (i = 0; i < old_data_size; ++i) temp->points[offset + i] = _integrated_clouds_map->points[i];
+
+        /// shift clouds size
+        for (i = cloudsQueue_fixed_size-1; i>0; i--) enqueuedCloudsSizes[i] = enqueuedCloudsSizes[i-1];
+        if (cloudsQueue_fixed_size>=1) enqueuedCloudsSizes[0] = (int) _lidar_cloud_map->points.size();
+
+        _integrated_clouds_map->points.resize(final_size);
+        *_integrated_clouds_map = *temp;
+        
+        rclcpp::Time now = this->get_clock()->now();
+        
+        std::cout << "integrating end time " << now.seconds() << "." << now.nanoseconds() << std::endl;
+    }
+
 };
 
 #endif //TRAV_ANALYSIS_UTILITY_H

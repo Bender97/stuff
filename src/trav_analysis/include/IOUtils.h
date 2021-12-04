@@ -1,11 +1,10 @@
-
+#pragma once
 #ifndef TRAV_ANALYSIS_IOUTILS_H
 #define TRAV_ANALYSIS_IOUTILS_H
 
 #include "utility.h"
 #include <boost/filesystem.hpp>
-
-#include "Stats.h"
+//#include "Stats.h"
 
 /**
  * Stats contains all the statistics produced to evaluate the training and testing performances of a

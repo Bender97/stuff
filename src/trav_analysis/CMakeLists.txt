@@ -60,15 +60,15 @@ set ( CUSTOM_LIBRARIES  Stats IOUtils CellManagement  GridManagement)
 
 
 
+
 ament_target_dependencies(Stats           ${dependencies})
 ament_target_dependencies(IOUtils         ${dependencies})
 ament_target_dependencies(CellManagement  ${dependencies})
 ament_target_dependencies(GridManagement  ${dependencies})
 
+target_link_libraries(IOUtils         Stats            )
+target_link_libraries(GridManagement  ${PCL_LIBRARIES}  CellManagement )
 
-
-target_link_libraries(IOUtils Stats )
-target_link_libraries(GridManagement ${PCL_LIBRARIES}  CellManagement )
 
 add_executable(${PROJECT_NAME}_predicter src/predicter.cpp)
 target_link_libraries(${PROJECT_NAME}_predicter ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${CUSTOM_LIBRARIES} )
