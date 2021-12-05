@@ -12,6 +12,8 @@ def generate_launch_description():
     # Configure environment
     stdout_linebuf_envvar = SetEnvironmentVariable('RCUTILS_LOGGING_BUFFERED_STREAM', '1')
     stdout_colorized_envvar = SetEnvironmentVariable('RCUTILS_COLORIZED_OUTPUT', '1')
+    logging_envvar = SetEnvironmentVariable('RCUTILS_CONSOLE_OUTPUT_FORMAT', '{message}')
+
 
     # Simulated time
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')
@@ -68,6 +70,7 @@ def generate_launch_description():
     # Set environment variables
     ld.add_action(stdout_linebuf_envvar)
     ld.add_action(stdout_colorized_envvar)
+    ld.add_action(logging_envvar)
 
     # Add nodes
     # ld.add_action(lego_loam_node)

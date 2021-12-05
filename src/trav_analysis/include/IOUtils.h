@@ -23,7 +23,7 @@ public:
     static bool checkAndCreateDir(std::string &path);
     static bool dirExists(std::string &path);
 
-    static void checkPaths(std::string base_dir_path, rclcpp::Logger &logger);
+    static void checkPaths(std::string base_dir_path);
 
     static void writeStatsToFile(std::ofstream &out_stats_file,
                                  Stats &stats,

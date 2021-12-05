@@ -11,14 +11,14 @@ bool IOUtils::dirExists(std::string &path) {
     return boost::filesystem::exists(path);
 }
 
-void IOUtils::checkPaths(std::string base_dir_path, rclcpp::Logger &logger) {
+void IOUtils::checkPaths(std::string base_dir_path) {
     assert(base_dir_path.length()>0);
     if (base_dir_path[0]!='/') {        //no absolute value
         checkAndCreateDir(base_dir_path);
     }
     else {
         if (!dirExists(base_dir_path)) {
-            RCLCPP_ERROR_STREAM(logger, "The base directory indicated with the absolute path:\n" + base_dir_path + "\n does not exist! Adjust config/params.yaml file!");
+            std::cout << "The base directory indicated with the absolute path:\n" << base_dir_path << "\n does not exist! Adjust config/params.yaml file!" << std::endl;
             assert(false);
         }
     }

@@ -1,18 +1,21 @@
 
 
 #include "utility.h"
-
-#include "pcl_ros/transforms.hpp"
-#include <tf2_ros/buffer.h>
-#include <tf2_ros/create_timer_ros.h>
-#include <tf2_ros/message_filter.h>
-#include <tf2_ros/transform_listener.h>
-
+#include "IOUtils.h"
 
 class Predicter : public ParamServer {
 
 public:
     Predicter() {
+
+        // update and complete paths with the base path
+        base_dir_path += "vgta+/";
+        normalization_config_path = base_dir_path + normalization_config_path;
+        svm_model_path = base_dir_path + svm_model_path;
+
+        IOUtils::checkPaths(base_dir_path);
+
+        loadSVM();
 
         // initialization of subscriber to Lidar cloud
         subLidarCloud = this->create_subscription<sensor_msgs::msg::PointCloud2>(
@@ -46,13 +49,6 @@ private:
 
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubIntegratedCloud;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubPredTravGrid;
-
-    sensor_msgs::msg::PointCloud2 lidar_cloud_in_msg;
-    sensor_msgs::msg::PointCloud2 lidar_cloud_in_map_msg;
-    sensor_msgs::msg::PointCloud2 integrated_clouds_map_msg;
-    sensor_msgs::msg::PointCloud2 integrated_clouds_lidar_msg;
-
-
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr  _lidar_cloud_in;
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr  _lidar_cloud_map;
@@ -101,9 +97,29 @@ private:
         _curr_trav_grid_lidar->points.resize(grid.num_cells_per_side_squared);
     }
 
+    void loadSVM() {
+
+        RCLCPP_INFO(this->get_logger(), "loading SVM model from %s", svm_model_path.c_str());
+
+        /// LOAD SVM
+//        svm = cv::Algorithm::load<cv::ml::SVM>(svm_model_path);
+        svm = cv::ml::SVM::load(svm_model_path);
+
+        assert(svm->isTrained());
+
+        features_num = svm->getVarCount();
+
+        // stack the indexes of the features that svm will use
+        for (int i=0; i<22; ++i) {
+            if(columnIsRequested(i))
+                feats_indexes.push_back(i);
+        }
+        RCLCPP_INFO(this->get_logger(), "loading normalization configs from %s", normalization_config_path.c_str());
+        IOUtils::loadNormalizationConfig(normalization_config_path, features_num, min, p2p);
+    }
+
     void lidarCloudHandler(const sensor_msgs::msg::PointCloud2::SharedPtr laserCloudMsg) {
         lidar_msg_header = laserCloudMsg->header;
-        lidar_cloud_in_msg = *laserCloudMsg;
 
         pcl::fromROSMsg(*laserCloudMsg, *_lidar_cloud_in);
         std::cout << "points: " << _lidar_cloud_in->points.size() << std::endl;
@@ -220,6 +236,53 @@ private:
                                      );
     }
 
+
+    void buildFeature(cv::Mat &x, Features &feature) {
+        float *start = &(feature.linearity);
+
+        for (int i=0; i < (int) feats_indexes.size()    ; ++i)
+            x.at<float>(0, i) =  (*(start + feats_indexes[i]) - min[i]) / p2p[i];
+    }
+
+
+    void fillFeatureMatrix( ) {
+        DatasetStats dataset_stats;
+        Features feature;
+        cv::Mat feature_vector(1, features_num, CV_32F);
+
+        /// calculate normal of the whole scene
+        computeScenePlaneNormal(_integrated_clouds_map,  feature);
+
+        /// build the feature matrix x (in the indexes vector store the correspondant index of the cell)
+        for (int i = 0; i < grid.num_cells_per_side_squared; ++i) {
+            feature.reset();
+
+            /// if this function returns false, then the class should be unknown (already set as default)
+            if ( getCellFeaturesPred(cellPointsBuckets[i], feature, false,
+                                     _pred_trav_grid_map->points[i],
+//                                     leftImage_hsv,
+                                     _curr_trav_grid_lidar->points[i],
+                                     dataset_stats)
+                    ) {
+
+                /// build the feature vector corresponding to the current field cell
+                buildFeature(feature_vector, feature);
+                /// copy the row
+                for (int j=0; j<features_num; j++) features_matrix.at<float>(i, j) = feature_vector.at<float>(0, j);
+
+                cellIsPredictable[i] = 1;
+            }
+        }
+    }
+
+    void predictEachField() {
+        fillFeatureMatrix();
+//        predictFeatureMatrix();
+//        setPredictedValuesToPredictedCloud();
+//        /// integrate information coming from the neighbors!
+//        filterOutliers();
+    }
+
     void publishClouds() {
         sensor_msgs::msg::PointCloud2 temp;
 
@@ -239,7 +302,6 @@ private:
     }
 
     void script() {
-
 
         // transform lidar cloud to mapFrame ( to integrate it with the previous clouds )
         transformLidarCloudToMapFrame();
@@ -277,22 +339,11 @@ private:
 
         getGridInLidarFrame();
 
+        predictEachField();
+
         publishClouds();
-    }
 
-    void loadSVM() {
-
-        /// LOAD SVM
-//        svm = cv::ml::SVM::load(svm_model_path);
-//        assert(svm->isTrained());
-//
-//        features_num = svm->getVarCount();
-//
-//        // stack the indexes of the features that svm will use
-//        for (int i=0; i<22; ++i) {
-//            if(columnIsRequested(i))
-//                feats_indexes.push_back(i);
-//        }
+        frame_cont++;
     }
 };
 

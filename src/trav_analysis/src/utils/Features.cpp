@@ -73,7 +73,7 @@ void Features::computeCorrelationMatrixComponents(pcl::PointCloud<pcl::PointXYZR
 bool Features::computeGeometricalFeatures( const std::vector<pcl::PointXYZRGB *> &points_in_bucket,
                                            cv::Point3f &scene_normal,
                                            pcl::PointXYZI &belonging_cell_center,
-                                           std::vector<short int> &curvity_histogram_buckets, int numbuckets) {
+                                           int numbuckets) {
     cx = 0, cy = 0, cz = 0;
     a11 = 0, a12 = 0, a13 = 0, a22 = 0, a23 = 0, a33 = 0;
     numpoints = points_in_bucket.size();
@@ -137,7 +137,7 @@ bool Features::computeGeometricalFeatures( const std::vector<pcl::PointXYZRGB *>
 
 
     /// COMPUTE INTERNAL DENSITY
-    bool internal[gridParams->internal_num_cells_per_side_squared];
+    std::vector<bool> internal(gridParams->internal_num_cells_per_side_squared);
     int internal_idx;
     InternalCell internal_cell(gridParams->resolution, gridParams->internal_resolution);
 
@@ -161,7 +161,7 @@ bool Features::computeGeometricalFeatures( const std::vector<pcl::PointXYZRGB *>
     float max_magn = -1, min_magn = FLT_MAX;
     std::vector<float> magns(points_in_bucket.size());
 
-    for (int i=0; i<points_in_bucket.size(); i++) {
+    for (size_t i=0; i<points_in_bucket.size(); i++) {
         magns[i] = NUM2SQ(points_in_bucket[i]->x) + NUM2SQ(points_in_bucket[i]->y) + NUM2SQ(points_in_bucket[i]->z);
         if (magns[i]>max_magn) max_magn = magns[i];
         if (magns[i]<min_magn) min_magn = magns[i];
